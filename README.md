@@ -1,173 +1,92 @@
 # Natural Gas Data Analytics & ETL Pipeline
 
-## Project Overview
+## Overview
 
-This project demonstrates the development of an end-to-end ETL (Extract, Transform, Load) pipeline using Python, Pandas, and PostgreSQL.
+I built this project to practice data engineering using Python, Pandas, SQL, and PostgreSQL.
 
-The pipeline processes historical natural gas consumption and cost data, performs data cleaning and validation, and loads the results into a relational database for SQL-based analysis.
+The project uses historical natural gas consumption data from the [CBU Service Center Natural Gas dataset](https://catalog.data.gov/dataset/cbu-service-center-natural-gas). It contains 197 records with billing dates, gas consumption (therms), and costs.
 
-The project focuses on data quality, database integrity, reusable SQL queries, automated testing, and error logging.
+The goal is to clean and validate the data, load it into PostgreSQL, and use SQL to analyze consumption and cost patterns.
 
-## Dataset
+## Technologies
 
-**Source:** [CBU Service Center Natural Gas — Data.gov](https://catalog.data.gov/dataset/cbu-service-center-natural-gas)
+- **Python & Pandas** — Data cleaning and transformation
+- **PostgreSQL** — Data storage and SQL analysis
+- **Psycopg** — Python and PostgreSQL connection
+- **pytest** — Unit testing
+- **Python Logging** — Pipeline monitoring and error tracking
 
-The dataset contains 197 records of natural gas consumption and costs.
+## ETL Pipeline
 
-| Column | Description |
-|---|---|
-| `start_date` | Start date of the usage period |
-| `end_date` | End date of the usage period |
-| `therms` | Natural gas consumption in therms |
-| `cost` | Cost of natural gas consumption |
+The pipeline consists of four main steps:
 
-The data covers billing periods from December 2009 through May 2026.
+1. **Extract:** Read the raw data from a CSV file.
+2. **Transform:** Convert dates and numeric columns into the correct data types.
+3. **Validate:** Check for missing values, negative consumption or costs, invalid date ranges, and duplicate billing periods.
+4. **Load:** Insert validated records into PostgreSQL.
 
-## Tech Stack
+I used database constraints to prevent invalid records and `ON CONFLICT DO NOTHING` to skip duplicate billing periods when the pipeline runs multiple times.
 
-- **Python:** ETL development and automation
-- **Pandas:** Data exploration, cleaning, and validation
-- **PostgreSQL:** Relational database and SQL analytics
-- **Psycopg 3:** Python-to-PostgreSQL connectivity
-- **pytest:** Automated unit testing
-- **Python Logging:** Pipeline monitoring and error tracking
-- **Git:** Version control
+The pipeline also uses transactions to avoid partially committed data if an insert fails.
 
-## ETL Pipeline Architecture
+## SQL Analysis
 
-The ETL workflow consists of four main stages:
+After loading the data into PostgreSQL, I wrote SQL queries to analyze:
 
-**1. Extract**
+- Total and average gas consumption and costs
+- Yearly gas consumption and cost trends
+- Average cost per therm
+- Low, medium, and high cost categories
+- Consumption patterns using `GROUP BY`, `HAVING`, and CTEs
 
-Read the source CSV file into a Pandas DataFrame.
+I also created a SQL View to reuse the yearly consumption summary without rewriting the same query.
 
-**2. Transform**
+Yearly summaries group records by their billing period's start year.
 
-- Convert consumption and cost values into numeric data types.
-- Convert date strings into datetime values.
-- Prepare cleaned data for database insertion.
-
-**3. Validate**
-
-Check for:
-
-- Missing or invalid values
-- Negative gas consumption
-- Negative costs
-- Invalid date ranges
-- Duplicate billing periods
-
-The current validation strategy raises a `ValueError` and stops the pipeline if any record fails validation.
-
-**4. Load**
-
-Load validated records into PostgreSQL using Psycopg.
-
-The pipeline uses parameterized SQL statements and `ON CONFLICT DO NOTHING` to prevent duplicate billing periods from being inserted during repeated runs.
-
-Database transactions help ensure that a failed load does not leave partially committed data.
-
-## Database Design
-
-The PostgreSQL database contains a `gas_usage` table with the following columns:
-
-| Column | Data Type |
-|---|---|
-| `usage_id` | SERIAL PRIMARY KEY |
-| `start_date` | DATE |
-| `end_date` | DATE |
-| `therms` | NUMERIC(12,3) |
-| `cost` | NUMERIC(12,2) |
-| `created_at` | TIMESTAMP |
-
-Database constraints enforce nonnegative consumption and cost values, valid date ranges, and unique billing periods.
-
-**Design assumption:** The source data represents a single facility. Therefore, the combination of `start_date` and `end_date` is used as the unique billing-period key. A multi-customer system would require a more specific identifier, such as a customer, account, or meter ID.
-
-## SQL Analytics
-
-Reusable SQL scripts provide:
-
-- Overall consumption and cost statistics
-- Annual consumption and cost summaries
-- Cost-per-therm calculations
-- Cost category classification using `CASE WHEN`
-- Aggregations using `GROUP BY`
-- Filtering aggregated results using `HAVING`
-- Common Table Expressions (CTEs)
-- Reusable reporting views
-
-The `yearly_gas_summary` view provides annual consumption, cost, and record counts.
-
-**Reporting assumption:** Billing periods are assigned to the year of their `start_date`. Consumption crossing calendar-year boundaries is not split between years.
-
-## Key Findings
-
-The following results were obtained from the 197 loaded records:
+## Results
 
 | Metric | Result |
 |---|---:|
 | Total records | 197 |
-| Total gas consumption | 233,213.811 therms |
+| Total consumption | 233,213.811 therms |
 | Total cost | $129,566.18 |
-| Average consumption per billing period | 1,183.826 therms |
+| Average consumption per period | 1,183.826 therms |
 | Overall cost per therm | $0.5556 |
-| Highest consumption year by start date | 2011 |
 
-The cost-per-therm metric is calculated by dividing total cost by total consumption.
+## Testing and Logging
 
-## Automated Testing
+I used pytest to test five scenarios:
 
-The project uses `pytest` to test data validation behavior.
+- Valid data
+- Invalid date ranges
+- Negative gas consumption
+- Negative costs
+- Duplicate billing periods
 
-Five unit tests have been implemented:
+All five tests passed.
 
-1. Valid data acceptance
-2. Invalid date range detection
-3. Negative consumption detection
-4. Negative cost detection
-5. Duplicate billing period detection
+I also added logging to track pipeline execution, processed records, and errors. Logs are written to both the terminal and a local log file.
 
-All five tests passed during local testing.
+## Running the Project
 
-Tests use sample DataFrames and do not modify the production dataset or PostgreSQL records.
+Install the dependencies:
 
-## Logging and Error Handling
-
-Python's built-in logging module records pipeline execution events.
-
-The logs include:
-
-- Pipeline start and completion
-- Number of records extracted and validated
-- Number of records inserted
-- Error messages and tracebacks
-
-Log messages are written to the terminal and `logs/etl.log`.
-
-Exceptions are logged and re-raised to ensure failures are visible.
-
-Create a `.env` file in the project root and configure:
-
-```dotenv
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=natural_gas_db
-DB_USER=postgres
-DB_PASSWORD=your_password
+```bash
+pip install -r requirements.txt
 ```
-Replace the example credentials with your own local configuration. 
 
-## Future Improvements
+Create a PostgreSQL database named `natural_gas_db`, configure `.env` using `.env.example`, and run `sql/create_tables.sql`.
 
-Potential improvements include:
+Run the ETL pipeline:
 
-- Separating invalid records into a rejection dataset
-- Adding integration tests for database operations
-- Implementing scheduled pipeline execution
-- Adding data visualization dashboards
-- Supporting multiple facilities and utility meters
+```bash
+python src/pipeline.py
+```
 
-## Project Purpose
+Run the tests:
 
-This project was developed as a practical learning exercise to strengthen skills in Python, SQL, ETL development, data quality management, and relational databases.
+```bash
+python -m pytest tests/ -v
+```
+
+The SQL analysis scripts are available in the `sql/` directory.
